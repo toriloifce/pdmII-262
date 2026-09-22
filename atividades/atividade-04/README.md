@@ -5,6 +5,6 @@ Criar o projeto Dart
 Entrar no diretorio do projeto criado
 Copiar o servidor web com a extensão dart para a pasta bin
 
-<img width="809" height="224" alt="image" src="https://github.com/user-attachments/assets/580e29bf-bf94-4dc9-b2d1-7b7dc40ebf5f" />
-<img width="1062" height="45" alt="image" src="https://github.com/user-attachments/assets/8b7300b2-60b8-499b-a2ab-7b4a905ff3ab" />
+<img width="637" height="157" alt="image" src="https://github.com/user-attachments/assets/7828f304-2dbe-4d90-9396-473f4c6dcf39" />
 
+<img width="809" height="224" alt="image" src="https://github.com/user-attachments/assets/580e29bf-bf94-4dc9-b2d1-7b7dc40ebf5f" />
