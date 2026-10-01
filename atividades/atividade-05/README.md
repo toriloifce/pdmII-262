@@ -19,3 +19,5 @@ OBS: 
 Imprimir todos os alunos no formato:
 
 ID NOME DISCIPLINA MEDIA FALTAS MENSAGEM
+
+<img width="763" height="132" alt="image" src="https://github.com/user-attachments/assets/e736edb7-1942-4af5-9760-9ea6dada3473" />
