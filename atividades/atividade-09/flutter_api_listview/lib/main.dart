@@ -15,48 +15,48 @@ class MeuApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Consumo de API & ListView',
+      title: 'Catálogo de Terror',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFB71C1C),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF121212),
         useMaterial3: true,
       ),
-      home: const ListaUsuariosScreen(),
+      home: const ListaFilmesTerrorScreen(),
     );
   }
 }
 
 // ============================================================================
-// 1. MODELO DE DADOS (Conversão de JSON para Objeto Dart)
+// 1. MODELO DE DADOS (Conversão de JSON para Objeto FilmeTerror)
 // ============================================================================
-class Usuario {
+class FilmeTerror {
   final int id;
-  final String nome;
-  final String username;
-  final String email;
-  final String telefone;
-  final String empresa;
-  final String cidade;
+  final String titulo;
+  final String posterUrl;
+  final String imdbId;
 
-  const Usuario({
+  const FilmeTerror({
     required this.id,
-    required this.nome,
-    required this.username,
-    required this.email,
-    required this.telefone,
-    required this.empresa,
-    required this.cidade,
+    required this.titulo,
+    required this.posterUrl,
+    required this.imdbId,
   });
 
-  factory Usuario.fromJson(Map<String, dynamic> json) {
-    return Usuario(
-      id: json['id'] as int,
-      nome: json['name'] as String,
-      username: json['username'] as String,
-      email: json['email'] as String,
-      telefone: json['phone'] as String,
-      empresa: (json['company']?['name'] as String?) ?? 'Não informada',
-      cidade: (json['address']?['city'] as String?) ?? 'Não informada',
+  factory FilmeTerror.fromJson(Map<String, dynamic> json) {
+    final show = (json['show'] as Map<String, dynamic>?) ?? json;
+    final image = show['image'] as Map<String, dynamic>?;
+    final externals = show['externals'] as Map<String, dynamic>?;
+
+    return FilmeTerror(
+      id: (show['id'] as num?)?.toInt() ?? 0,
+      titulo: (show['name'] as String?) ?? 'Título Desconhecido',
+      posterUrl: (image?['medium'] as String?) ?? '',
+      imdbId: (externals?['imdb'] as String?) ?? 'N/A',
     );
   }
 }
@@ -64,21 +64,24 @@ class Usuario {
 // ============================================================================
 // 2. CAMADA DE SERVIÇO (Requisição HTTP GET + Tratamento de Erros)
 // ============================================================================
-class UsuarioService {
-  static const String _baseUrl = 'https://jsonplaceholder.typicode.com/users';
+class FilmeTerrorService {
+  static const String _baseUrl = 'https://api.tvmaze.com/search/shows?q=horror';
 
-  Future<List<Usuario>> buscarUsuarios() async {
+  Future<List<FilmeTerror>> buscarFilmes() async {
     try {
       final response = await http
           .get(
             Uri.parse(_baseUrl),
             headers: {'Accept': 'application/json'},
           )
-          .timeout(const Duration(seconds: 10)); // Evita travamento infinito
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final List<dynamic> dadosJson = jsonDecode(response.body);
-        return dadosJson.map((json) => Usuario.fromJson(json)).toList();
+        return dadosJson
+            .map((json) => FilmeTerror.fromJson(json as Map<String, dynamic>))
+            .where((filme) => filme.titulo.isNotEmpty)
+            .toList();
       } else {
         throw Exception(
           'Falha no servidor (Código HTTP: ${response.statusCode}).',
@@ -99,16 +102,17 @@ class UsuarioService {
 // ============================================================================
 // 3. TELA PRINCIPAL (Gerenciamento de Estado, ListView.builder e Pull-to-Refresh)
 // ============================================================================
-class ListaUsuariosScreen extends StatefulWidget {
-  const ListaUsuariosScreen({super.key});
+class ListaFilmesTerrorScreen extends StatefulWidget {
+  const ListaFilmesTerrorScreen({super.key});
 
   @override
-  State<ListaUsuariosScreen> createState() => _ListaUsuariosScreenState();
+  State<ListaFilmesTerrorScreen> createState() =>
+      _ListaFilmesTerrorScreenState();
 }
 
-class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
-  final UsuarioService _usuarioService = UsuarioService();
-  late Future<List<Usuario>> _futureUsuarios;
+class _ListaFilmesTerrorScreenState extends State<ListaFilmesTerrorScreen> {
+  final FilmeTerrorService _filmeService = FilmeTerrorService();
+  late Future<List<FilmeTerror>> _futureFilmes;
 
   @override
   void initState() {
@@ -116,54 +120,61 @@ class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
     _carregarDados();
   }
 
-  // Atualiza o estado da tela disparando uma nova requisição
   void _carregarDados() {
     setState(() {
-      _futureUsuarios = _usuarioService.buscarUsuarios();
+      _futureFilmes = _filmeService.buscarFilmes();
     });
   }
 
-  // Função acionada pelo gesto de puxar para baixo (Pull-to-Refresh)
   Future<void> _recarregarLista() async {
     _carregarDados();
-    await _futureUsuarios;
+    await _futureFilmes;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Diretório de Usuários'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_movies, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text(
+              'Filmes de Terror',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: const Color(0xFF1F1A1A),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Recarregar dados',
+            tooltip: 'Recarregar catálogo',
             onPressed: _carregarDados,
           ),
         ],
       ),
       body: RefreshIndicator(
+        color: Colors.redAccent,
         onRefresh: _recarregarLista,
-        child: FutureBuilder<List<Usuario>>(
-          future: _futureUsuarios,
+        child: FutureBuilder<List<FilmeTerror>>(
+          future: _futureFilmes,
           builder: (context, snapshot) {
-            // ESTADO 1: Aguardando resposta da API (Indicador de Progresso)
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(),
+                    CircularProgressIndicator(color: Colors.redAccent),
                     SizedBox(height: 16),
-                    Text('Carregando usuários da API...'),
+                    Text('Invocando filmes de terror da API...'),
                   ],
                 ),
               );
             }
 
-            // ESTADO 2: Erro na requisição (Mensagem amigável + Botão Tentar Novamente)
             if (snapshot.hasError) {
               final mensagemErro = snapshot.error
                   .toString()
@@ -176,13 +187,13 @@ class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(
-                        Icons.wifi_off_rounded,
+                        Icons.warning_amber_rounded,
                         size: 64,
                         color: Colors.redAccent,
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Ops! Não foi possível carregar os dados',
+                        'Não foi possível carregar os filmes',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -192,11 +203,15 @@ class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
                       const SizedBox(height: 8),
                       Text(
                         mensagemErro,
-                        style: TextStyle(color: Colors.grey[700]),
+                        style: TextStyle(color: Colors.grey[400]),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
                       FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red[900],
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: _carregarDados,
                         icon: const Icon(Icons.refresh),
                         label: const Text('Tentar Novamente'),
@@ -207,22 +222,20 @@ class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
               );
             }
 
-            // ESTADO 3: Lista vazia
-            final usuarios = snapshot.data ?? [];
-            if (usuarios.isEmpty) {
+            final filmes = snapshot.data ?? [];
+            if (filmes.isEmpty) {
               return const Center(
-                child: Text('Nenhum usuário encontrado.'),
+                child: Text('Nenhum filme de terror encontrado.'),
               );
             }
 
-            // ESTADO 4: Dados carregados com sucesso (ListView.builder otimizado)
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(12),
-              itemCount: usuarios.length,
+              itemCount: filmes.length,
               itemBuilder: (context, index) {
-                final usuario = usuarios[index];
-                return _UsuarioCard(usuario: usuario);
+                final filme = filmes[index];
+                return _FilmeCard(filme: filme);
               },
             );
           },
@@ -233,108 +246,217 @@ class _ListaUsuariosScreenState extends State<ListaUsuariosScreen> {
 }
 
 // ============================================================================
-// 4. WIDGET PERSONALIZADO PARA CADA ITEM DA LISTA
+// 4. WIDGET DE PÔSTER DO FILME COM FALLBACK SEGURO
 // ============================================================================
-class _UsuarioCard extends StatelessWidget {
-  final Usuario usuario;
+class _PosterFilme extends StatelessWidget {
+  final String posterUrl;
+  final double largura;
+  final double altura;
 
-  const _UsuarioCard({required this.usuario});
+  const _PosterFilme({
+    required this.posterUrl,
+    this.largura = 60,
+    this.altura = 90,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: posterUrl.isEmpty
+          ? _fallbackPoster()
+          : Image.network(
+              posterUrl,
+              width: largura,
+              height: altura,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: largura,
+                  height: altura,
+                  color: const Color(0xFF2A2424),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) => _fallbackPoster(),
+            ),
+    );
+  }
+
+  Widget _fallbackPoster() {
+    return Container(
+      width: largura,
+      height: altura,
+      color: const Color(0xFF2C1515),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.movie_filter, color: Colors.redAccent, size: 28),
+          SizedBox(height: 4),
+          Text(
+            'TERROR',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Colors.white70,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 5. WIDGET PERSONALIZADO PARA CADA FILME DA LISTA
+// ============================================================================
+class _FilmeCard extends StatelessWidget {
+  final FilmeTerror filme;
+
+  const _FilmeCard({required this.filme});
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
+      color: const Color(0xFF1E1E1E),
+      elevation: 3,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          foregroundColor: Colors.white,
-          child: Text(
-            usuario.nome[0].toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(
-          usuario.nome,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.email_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    usuario.email,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.business_outlined, size: 14, color: Colors.grey),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '${usuario.empresa} • ${usuario.cidade}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.red.withValues(alpha: 0.25)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () {
-          // Exibe detalhes completos ao tocar no card
           showModalBottomSheet(
             context: context,
+            isScrollControlled: true,
+            backgroundColor: const Color(0xFF1A1717),
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            builder: (_) => Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    usuario.nome,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  Text(
-                    '@${usuario.username}',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const Divider(height: 24),
-                  ListTile(
-                    leading: const Icon(Icons.email),
-                    title: const Text('E-mail'),
-                    subtitle: Text(usuario.email),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.phone),
-                    title: const Text('Telefone'),
-                    subtitle: Text(usuario.telefone),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.location_city),
-                    title: const Text('Cidade / Empresa'),
-                    subtitle: Text('${usuario.cidade} - ${usuario.empresa}'),
-                  ),
-                ],
+            builder: (_) => SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PosterFilme(
+                      posterUrl: filme.posterUrl,
+                      largura: 130,
+                      altura: 195,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      filme.titulo,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Chip(
+                      avatar: const Icon(
+                        Icons.local_fire_department,
+                        color: Colors.redAccent,
+                        size: 18,
+                      ),
+                      label: const Text('Gênero: Terror / Horror'),
+                      backgroundColor: const Color(0xFF2E1A1A),
+                    ),
+                    const Divider(height: 24),
+                    ListTile(
+                      leading: const Icon(Icons.tag, color: Colors.redAccent),
+                      title: const Text('ID no Catálogo'),
+                      subtitle: Text('#${filme.id}'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.movie, color: Colors.redAccent),
+                      title: const Text('Código IMDb'),
+                      subtitle: Text(filme.imdbId),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              _PosterFilme(posterUrl: filme.posterUrl, largura: 62, altura: 92),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      filme.titulo,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: Colors.redAccent.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: const Text(
+                            'TERROR',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          Icons.confirmation_number_outlined,
+                          size: 14,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'IMDb: ${filme.imdbId}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
+        ),
       ),
     );
   }
